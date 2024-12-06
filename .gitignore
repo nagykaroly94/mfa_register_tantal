@@ -2,3 +2,6 @@
 *.ini
 *.docx
 *.pdf
+/build/tantal
+/dist
+tantal.spec
