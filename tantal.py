@@ -554,8 +554,10 @@ def export_document(treeview, qr_canvas):
         messagebox.showerror("Hiba", f"Nem sikerült a PDF fájl generálása: {e}")
 
 # Főablak
+img=("ikon.ico")
 root = tk.Tk()
 root.title("Tantál")
+root.iconbitmap(img)
 root.grid_columnconfigure(0, weight=1)  # A főkeret oszlopszabályozása
 root.grid_rowconfigure(0, weight=1)    # A főkeret sorainak szabályozása
 root.resizable(False, False)
