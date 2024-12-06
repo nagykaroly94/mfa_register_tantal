@@ -1,5 +1,5 @@
 CREATE DATABASE tantal;
-USE DATABASE tantal;
+USE tantal;
 CREATE TABLE `adatok` (
   `id` int NOT NULL AUTO_INCREMENT,
   `nev` varchar(255) NOT NULL,
