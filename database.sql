@@ -1,3 +1,5 @@
+CREATE DATABASE tantal;
+USE DATABASE tantal;
 CREATE TABLE `adatok` (
   `id` int NOT NULL AUTO_INCREMENT,
   `nev` varchar(255) NOT NULL,
@@ -12,4 +14,4 @@ CREATE TABLE `adatok` (
   `qr_kod` text,
   `ugyintezo` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  );
