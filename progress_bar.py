@@ -4,10 +4,7 @@ from docx2pdf import convert
 import threading  # A konvertálás külön szálon történik, hogy ne fagyjon le a GUI
 
 def convert_single_docx_to_pdf(input_file):
-    """
-    Egy adott .docx fájl konvertálása PDF-be a docx2pdf segítségével.
-    :param input_file: A bemeneti .docx fájl teljes elérési útja.
-    """
+
     # Új ablak a progress bar számára
     progress_window = tk.Toplevel()
     progress_window.title("Folyamat")
