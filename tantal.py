@@ -16,6 +16,7 @@ from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
 from docx2pdf import convert
+from reportlab.pdfgen import canvas
 
 kivalasztott_png = None
 value = None
@@ -529,29 +530,14 @@ def export_document(treeview, qr_canvas):
     file_name = f"{nev}_ketlepcsos_hitelesites.docx"
     try:
         doc.save(file_name)
-        print("Siker", f"A dokumentum mentve: {file_name}")
+        messagebox.showinfo("Siker", f"A dokumentum mentve: {file_name}")
+        os.startfile(file_name)
     except Exception as e:
         messagebox.showerror("Hiba", f"Nem sikerült menteni a dokumentumot: {e}")
     finally:
         # Tisztítsd meg az ideiglenes QR-kód fájlt
         if os.path.exists(qr_kod_path):
             os.remove(qr_kod_path)
-
-    input_file = file_name
-    if not input_file.endswith('.docx'):
-        messagebox.showerror("Hiba", "A megadott fájl nem .docx formátumú!")
-        return
-
-    # A kimeneti PDF fájl neve
-    output_file = input_file.replace('.docx', '.pdf')
-
-    try:
-        # Konvertálás PDF-be
-        convert(input_file, output_file)
-        os.remove(file_name)
-        messagebox.showinfo("Siker", f"A PDF generálása sikeres: {output_file}")
-    except Exception as e:
-        messagebox.showerror("Hiba", f"Nem sikerült a PDF fájl generálása: {e}")
 
 # Főablak
 img=("ikon.ico")
