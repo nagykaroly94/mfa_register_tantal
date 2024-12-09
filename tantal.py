@@ -206,12 +206,12 @@ def on_tree_select(event):
     """A kijelölt sor QR kód oszlopából QR kód generálása és megjelenítése."""
     selected_item = treeview.focus()  # Kijelölt sor azonosítója
     if not selected_item:
-        qr_text.set("Válassz egy sort a QR kódhoz!")
+        qr_text.set("Válassz egy sort a QR kód megjelenítéséhez!")
         qr_canvas.delete("all")  # Canvas törlése
         return
 
     qr_data = qr_code
-    qr_text.set(qr_data if qr_data else "Nincs QR kód!")
+    qr_text.set(qr_data if qr_data else "Nincs megjeleníthető QR kód!")
 
     if qr_data:
         img = generate_qr(qr_data)
