@@ -1,27 +1,24 @@
 import mysql.connector
 from mysql.connector import Error
+import configparser
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
+import tkinter.messagebox
+from tkinter import messagebox
 import qrcode
-from PIL import Image, ImageTk
+from PIL import ImageTk
 from PIL import ImageGrab
 import cv2
 import numpy as np
-import tkinter.messagebox
-from tkinter import messagebox
 import os
-import configparser
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Pt
-from docx2pdf import convert
-from reportlab.pdfgen import canvas
+from docx.shared import Pt, RGBColor
 
 kivalasztott_png = None
 value = None
-ugyint_search = None
-option_list = ["Kosztin László", "Szekér Szabina", "Kosztin Anna", "Bóné Zsuzsa", "Kosztin Gábor"]
+search_entry = None
 
 def db_kapcsolodas():
     config = configparser.ConfigParser()
@@ -77,7 +74,6 @@ def qr_read():
         else:
             msg4 = ("Nem találtunk QR kódot.")
             tkinter.messagebox.showerror(title="Hiba", message=msg4)
-    print(value)
 
 def fetch_data():
     """Adatok lekérdezése a MySQL adatbázisból."""
@@ -91,7 +87,7 @@ def fetch_data():
             return []
 
         cursor = connection.cursor()
-        cursor.execute("SELECT id, nev, adoszam, felhasznalonev, jelszo, telefonszam, emailcim, torlokod, onlineszamla_nev, onlineszamla_jelszo, ugyintezo FROM adatok")
+        cursor.execute("SELECT id, nev, cegnev, felhasznalonev, jelszo, telefonszam, emailcim, torlokod FROM adatok")
         rows = cursor.fetchall()
         
         for row in treeview.get_children():
@@ -109,6 +105,13 @@ def fetch_data():
         # Zárjuk le a kapcsolatot, ha van
         if connection and connection.is_connected():
             connection.close()
+
+def default_data():
+    search_entry.delete(0, tk.END)
+
+def default_search():
+    default_data()
+    fetch_data()
 
 def copy_to_clipboard():
     """Az aktuálisan kijelölt cella másolása a vágólapra."""
@@ -159,7 +162,6 @@ def get_selected_item_id():
     """Lekéri a kiválasztott sor ID-ját a Treeview-ból."""
     selected_item = treeview.focus()  # Kiválasztott sor azonosítója
     if not selected_item:
-        print("Nincs kijelölt sor!")
         return None  # Ha nincs kijelölt sor, visszatérünk None-nal
 
     values = treeview.item(selected_item, "values")  # A kiválasztott sor értékei
@@ -199,8 +201,8 @@ def on_tree_select(event):
     if item_id:
         qr_code = get_qr_code_from_db(item_id)
         if qr_code is None:
-            tkinter.messagebox.showwarning(title="Hiba", message=msg2)
-            msg2=("Nem találtunk QR kódot ehhez az ID-hoz.")
+             tkinter.messagebox.showwarning(title="Hiba", message="Nem találtunk QR kódot ehhez az ID-hoz.")  # Hibaüzenet ha nincs QR kód
+             return
     """A kijelölt sor QR kód oszlopából QR kód generálása és megjelenítése."""
     selected_item = treeview.focus()  # Kijelölt sor azonosítója
     if not selected_item:
@@ -213,12 +215,13 @@ def on_tree_select(event):
 
     if qr_data:
         img = generate_qr(qr_data)
-        img = img.resize((220, 220))  # Méret igazítása
+        img = img.resize((250, 250))  # Méret igazítása
         tk_image = ImageTk.PhotoImage(img)
 
         qr_canvas.delete("all")
         
         # QR kód középre helyezése
+        qr_canvas.update()
         canvas_width = qr_canvas.winfo_width()
         canvas_height = qr_canvas.winfo_height()
         x_center = (canvas_width - img.width) // 2
@@ -230,8 +233,15 @@ def on_tree_select(event):
 def adjust_column_width(tree, columns, data):
     """Automatikusan beállítja az oszlopok szélességét a legszélesebb tartalom alapján."""
     for col_index, col_name in enumerate(columns):
-        max_width = max(len(str(row[col_index])) for row in data)  # Legszélesebb adat
-        tree.column(col_name, width=max_width * 10)  # Szélesség szorzása, hogy illeszkedjen
+        # Legszélesebb adat hosszának meghatározása
+        max_width = max(len(str(row[col_index])) for row in data)  
+        
+        # A betűmérethez igazított szélesség kiszámítása
+        font_size_factor = 13  # Alap szorzó, finomhangolható
+        column_width = max(max_width * font_size_factor, 100)  # Minimalizált szélesség biztosítása
+        
+        # Oszlop szélességének beállítása
+        tree.column(col_name, width=column_width)
 
 def kijelolt_adat_torles():
     # Kiválasztott sor lekérdezése
@@ -286,19 +296,17 @@ def kijelolt_adat_torles():
 def ugyfel_megad():
     global value
     nev = nev_entry.get()
-    adoszam = adoszam_entry.get()
+    cegnev = cegnev_entry.get()
     felhasznalonev = felhasznalonev_entry.get()
     jelszo = jelszo_entry.get()
     telefon = telefon_entry.get()
     email = email_entry.get()
     torlo = torlo_entry.get()
-    osznev = osznev_entry.get()
-    oszjelszo = oszjelszo_entry.get()
     qrkod = value
-    ugyintezo = ugyint.get()
 
-    if not nev and adoszam and felhasznalonev and jelszo and telefon and email and torlo and osznev and oszjelszo and qrkod or ugyintezo == "Válassz a listából":
-        messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni és ki kell választani az ügyintézőt is a sikeres frissítéshez.")
+
+    if not (nev and cegnev and felhasznalonev and jelszo and telefon and email and torlo and qrkod):
+        messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni a sikeres hozzáadáshoz.")
         return
     mydb = db_kapcsolodas()
 
@@ -309,10 +317,10 @@ def ugyfel_megad():
     mycursor = mydb.cursor()
 
     sql= """
-        INSERT INTO adatok (nev, adoszam, felhasznalonev, jelszo, telefonszam, emailcim, torlokod, onlineszamla_nev, onlineszamla_jelszo, qr_kod, ugyintezo) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO adatok (nev, cegnev, felhasznalonev, jelszo, telefonszam, emailcim, torlokod, qr_kod) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-    values = (nev, adoszam, felhasznalonev, jelszo, telefon, email, torlo, osznev, oszjelszo, qrkod, ugyintezo)
+    values = (nev, cegnev, felhasznalonev, jelszo, telefon, email, torlo, qrkod)
     try:
             # SQL lekérdezés végrehajtása
         mycursor.execute(sql, values)
@@ -325,21 +333,18 @@ def ugyfel_megad():
             # Kapcsolat lezárása
         mydb.close()
         nev_entry.delete(0, tk.END)
-        adoszam_entry.delete(0, tk.END)
+        cegnev_entry.delete(0, tk.END)
         felhasznalonev_entry.delete(0, tk.END)
         jelszo_entry.delete(0, tk.END)
         telefon_entry.delete(0, tk.END)
         email_entry.delete(0, tk.END)
         torlo_entry.delete(0, tk.END)
-        osznev_entry.delete(0, tk.END)
-        oszjelszo_entry.delete(0, tk.END)
-        ugyint.set("Válassz a listából")
         qrkod_png.set("C:/")
 
-def search_ugyint():
-    global ugyint_search
+def search_ceg():
+    global search_entry
     # Keresési kulcsszó lekérdezése a beviteli mezőből
-    search_term = ugyint_search.get()
+    search_term = search_entry.get()
     
     # MySQL adatbázishoz való csatlakozás
     mydb = db_kapcsolodas()
@@ -349,8 +354,9 @@ def search_ugyint():
     mycursor = mydb.cursor()
     
     # SQL lekérdezés keresési feltétellel az "azonosito" oszlopra
-    sql = "SELECT id, nev, adoszam, felhasznalonev, jelszo, telefonszam, emailcim, torlokod, onlineszamla_nev, onlineszamla_jelszo, ugyintezo FROM adatok WHERE ugyintezo LIKE %s ORDER BY nev ASC"
-    mycursor.execute(sql, (search_term,))  # A % jelek a keresési mintát határozzák meg
+    sql = "SELECT id, nev, cegnev, felhasznalonev, jelszo, telefonszam, emailcim, torlokod FROM adatok WHERE cegnev LIKE %s ORDER BY id ASC"
+    search_pattern = f"%{search_term}%"
+    mycursor.execute(sql, (search_pattern,))  # A % jelek a keresési mintát határozzák meg
     
     sorok = mycursor.fetchall()
     
@@ -386,19 +392,16 @@ def ugyfel_frissites():
             if confirm_final:
                 # Új értékek lekérdezése az entry mezőkből
                 uj_nev = nev_entry.get()
-                uj_adoszam = adoszam_entry.get()
+                uj_cegnev = cegnev_entry.get()
                 uj_felhasznalonev = felhasznalonev_entry.get()
                 uj_jelszo = jelszo_entry.get()
                 uj_telefon = telefon_entry.get()
                 uj_email = email_entry.get()
                 uj_torlo = torlo_entry.get()
-                uj_osznev = osznev_entry.get()
-                uj_oszjelszo = oszjelszo_entry.get()
                 uj_qrkod = value
-                uj_ugyintezo = ugyint.get()
                 
                 # Ellenőrizzük, hogy vannak-e kitöltött értékek
-                if not uj_nev and uj_adoszam and uj_felhasznalonev and uj_jelszo and uj_telefon and uj_email and uj_torlo and uj_osznev and uj_oszjelszo and uj_qrkod or uj_ugyintezo == "Válassz a listából":
+                if not uj_nev and uj_cegnev and uj_felhasznalonev and uj_jelszo and uj_telefon and uj_email and uj_torlo and uj_qrkod:
                     messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni és ki kell választani az ügyintézőt is a sikeres frissítéshez.")
                     return
 
@@ -410,8 +413,8 @@ def ugyfel_frissites():
                         return
 
                     mycursor = mydb.cursor()
-                    sql = "UPDATE adatok SET nev = %s, adoszam = %s, felhasznalonev = %s, jelszo = %s, telefonszam = %s, emailcim = %s, torlokod = %s, onlineszamla_nev = %s, onlineszamla_jelszo = %s, qr_kod = %s, ugyintezo = %s WHERE id = %s"
-                    val = (uj_nev, uj_adoszam, uj_felhasznalonev, uj_jelszo, uj_telefon, uj_email, uj_torlo, uj_osznev, uj_oszjelszo, uj_qrkod, uj_ugyintezo, selected_data)
+                    sql = "UPDATE adatok SET nev = %s, cegnev = %s, felhasznalonev = %s, jelszo = %s, telefonszam = %s, emailcim = %s, torlokod = %s, qr_kod = %s WHERE id = %s"
+                    val = (uj_nev, uj_cegnev, uj_felhasznalonev, uj_jelszo, uj_telefon, uj_email, uj_torlo, uj_qrkod, selected_data)
                     mycursor.execute(sql, val)
                     mydb.commit()
                 except Exception as e:
@@ -422,15 +425,12 @@ def ugyfel_frissites():
                         mydb.close()
                     fetch_data()
                     nev_entry.delete(0, tk.END)
-                    adoszam_entry.delete(0, tk.END)
+                    cegnev_entry.delete(0, tk.END)
                     felhasznalonev_entry.delete(0, tk.END)
                     telefon_entry.delete(0, tk.END)
                     email_entry.delete(0, tk.END)
                     torlo_entry.delete(0, tk.END)
-                    osznev_entry.delete(0, tk.END)
-                    oszjelszo_entry.delete(0, tk.END)
                     jelszo_entry.delete(0,tk.END)
-                    ugyint.set("Válassz a listából")
 
                 messagebox.showinfo("Sikeres frissítés", f"{selected_username} felhasználó adatai frissítve.")
             else:
@@ -490,16 +490,16 @@ def export_document(treeview, qr_canvas):
     # QR-kód rész
     doc.add_heading("QR-kód", level=2)
     doc.add_paragraph("Az alábbi QR-kódot olvassa be az autentikátor alkalmazásával:")
-    doc.add_picture(qr_kod_path, width=Pt(200))
+    doc.add_picture(qr_kod_path, width=Pt(500))
     last_paragraph = doc.paragraphs[-1]
     last_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
     # QR-kód alatti szöveg vége az egyenlőségjel után
     qr_canvas_text = qr_text.get()
     if "=" in qr_canvas_text:
-        masik_adat = qr_canvas_text.split("=")[-1].strip()  # Az egyenlőségjel utáni rész
+       qr_adat = qr_canvas_text.split("=")[-1].strip()  # Az egyenlőségjel utáni rész
     else:
-        masik_adat = "Nincs egyenlőségjel a szövegben"
+        qr_adat = "Nincs egyenlőségjel a szövegben"
 
 
 
@@ -507,7 +507,7 @@ def export_document(treeview, qr_canvas):
     doc.add_heading("QR-kód nélkül", level=2)
     doc.add_paragraph("Ha a készüléke nem olvassa be a képet, a mobilalkalmazásban válassza a manuális beállítást és adja meg az alábbi karaktersort. A fiók nevét a kód beírásánál Ön határozhatja meg (célszerű beszédes elnevezést megadni, mint például az ügyfélkapus felhasználónév).")
     p = doc.add_paragraph()
-    run = p.add_run(masik_adat)
+    run = p.add_run(qr_adat)
     run.font.size = Pt(18)
     run.bold = True
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -516,15 +516,19 @@ def export_document(treeview, qr_canvas):
     # Helyreállítási kód
     doc.add_heading("Helyreállítási kód", level=2)
     p = doc.add_paragraph()
-    run = p.add_run(helyreallitasi_kod)
+    run = p.add_run(str(helyreallitasi_kod))
     run.font.size = Pt(18)
     run.bold = True
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
     # Figyelmeztetés
-    doc.add_paragraph(
-        "FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a helyreállítási kódot senkivel."
-    )
+    #doc.add_paragraph("FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a helyreállítási kódot senkivel.")
+    paragraph = doc.add_paragraph()
+    important_run = paragraph.add_run("FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a helyreállítási kódot senkivel.")
+    important_run.font.size = Pt(16)
+    important_run.font.color.rgb = RGBColor(255, 0, 0)
+    important_run.bold = True
+    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
 
     # Dokumentum mentése
     file_name = f"{nev}_ketlepcsos_hitelesites.docx"
@@ -539,136 +543,115 @@ def export_document(treeview, qr_canvas):
         if os.path.exists(qr_kod_path):
             os.remove(qr_kod_path)
 
-# Főablak
+# Főablak alapvető beállításai
 img=("ikon.ico")
 root = tk.Tk()
 root.title("Tantál")
 root.iconbitmap(img)
-root.grid_columnconfigure(0, weight=1)  # A főkeret oszlopszabályozása
-root.grid_rowconfigure(0, weight=1)    # A főkeret sorainak szabályozása
+root.grid_columnconfigure(0, weight=1)
+root.grid_rowconfigure(0, weight=1)
 root.resizable(False, False)
 
-# Főablak keretei
+# Rácshoz tartozó beállítások, frame-ek beálíltása
 main_frame = tk.Frame(root)
 main_frame.grid(row=0, column=0, sticky="nsew", columnspan=4)
-
+root.rowconfigure(0, weight=1)
+root.columnconfigure(0, weight=1)
+main_frame.columnconfigure(0, weight=3)
+main_frame.columnconfigure(1, weight=1)
+main_frame.columnconfigure(2, weight=2)
+main_frame.rowconfigure(0, weight=1)
+main_frame.rowconfigure(2, weight=1)
 treeview_frame = tk.Frame(main_frame)
-treeview_frame.grid(row=0, column=0, sticky="nsew", columnspan=3)
-
+treeview_frame.grid(row=0, column=0, sticky="nsew", columnspan=4)
 qr_frame = tk.Frame(main_frame, padx=20, pady=15, bg="white")
 qr_frame.grid(row=3, column=2, sticky="nsew", padx=15)
 qr_frame.grid_columnconfigure(0, weight=1)
 qr_frame.grid_rowconfigure(0, weight=1)
-
 search_frame = tk.Frame(main_frame)
 search_frame.grid(row=2, column=0, sticky="NSEW")
-
 data_frame = tk.Frame(main_frame)
 data_frame.grid(row=3, column=0, columnspan=2)
 
+#Adatok megadása és funkció gombok létrehozása
 label = tk.Label(data_frame, text="Név:", font=("Arial", 16))
-label.grid(row=0, column=0, sticky="W", padx=10)
+label.grid(row=0, column=0, sticky="W", padx=10, pady=10)
 
 nev_entry = tk.Entry(data_frame, font=("Arial", 16))
-nev_entry.grid(row=0, column=1, padx=10, pady=10)
+nev_entry.grid(row=0, column=1, sticky="W", padx=10, pady=10)
 
-label = tk.Label(data_frame, text="Adószám:", font=("Arial", 16))
-label.grid(row=2, column=0, sticky="W", padx=10)
+label = tk.Label(data_frame, text="Cégnév:", font=("Arial", 16))
+label.grid(row=2, column=0, sticky="W", padx=10, pady=10)
 
-adoszam_entry = tk.Entry(data_frame, font=("Arial", 16))
-adoszam_entry.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+cegnev_entry = tk.Entry(data_frame, font=("Arial", 16))
+cegnev_entry.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="Felhasználónév:", font=("Arial", 16))
-label.grid(row=4, column=0, sticky="W", padx=10)
+label.grid(row=4, column=0, sticky="W", padx=10, pady=10)
 
 felhasznalonev_entry = tk.Entry(data_frame, font=("Arial", 16))
 felhasznalonev_entry.grid(row=4, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="Jelszó:", font=("Arial", 16))
-label.grid(row=6, column=0, sticky="W", padx=10)
+label.grid(row=6, column=0, sticky="W", padx=10, pady=10)
 
 jelszo_entry = tk.Entry(data_frame, font=("Arial", 16))
 jelszo_entry.grid(row=6, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="Telefonszám:", font=("Arial", 16))
-label.grid(row=8, column=0, sticky="W", padx=10)
+label.grid(row=8, column=0, sticky="W", padx=10, pady=10)
 
 telefon_entry = tk.Entry(data_frame, font=("Arial", 16))
 telefon_entry.grid(row=8, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="E-mail cím:", font=("Arial", 16))
-label.grid(row=10, column=0, sticky="W", padx=10)
+label.grid(row=10, column=0, sticky="W", padx=10, pady=10)
 
 email_entry = tk.Entry(data_frame, font=("Arial", 16))
 email_entry.grid(row=10, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="QR kód:", font=("Arial", 16))
-label.grid(row=12, column=0, sticky="W", padx=10)
+label.grid(row=12, column=0, sticky="W", padx=10, pady=10)
 
 qrkod_png=tk.StringVar()
 qrkod_png.set("C:/")
 qrkod_entry = tk.Entry(data_frame, font=("Arial", 16),textvariable=qrkod_png)
-qrkod_entry.grid(row=12, column=1, padx=10, pady=10, sticky="nsew", columnspan=3)
+qrkod_entry.grid(row=12, column=1, padx=10, pady=10, sticky="nsew", columnspan=4)
 
 talloz_button = tk.Button(data_frame, font=("Arial", 16), text="QR kód kiválasztása", command=png_kivalasztasa)
-talloz_button.grid(row=12, column=4, padx=10, pady=10, sticky="nsew")
+talloz_button.grid(row=10, column=3, padx=10, pady=10, sticky="nsew", columnspan=2)
 
 label = tk.Label(data_frame, text="Törlő kód:", font=("Arial", 16))
-label.grid(row=0, column=3, sticky="W", padx=10)
+label.grid(row=0, column=3, sticky="W", padx=10, pady=10)
 
 torlo_entry = tk.Entry(data_frame, font=("Arial", 16))
 torlo_entry.grid(row=0, column=4, padx=10, pady=10)
 
-label = tk.Label(data_frame, text="Onlineszámla név:", font=("Arial", 16))
-label.grid(row=2, column=3, sticky="W", padx=10)
+add_button = tk.Button(data_frame, font=("Arial", 16), text="Új ügyfél hozzáadása", command=ugyfel_megad)
+add_button.grid(row=2, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
-osznev_entry = tk.Entry(data_frame, font=("Arial", 16))
-osznev_entry.grid(row=2, column=4, padx=10, pady=10, sticky="w")
+del_button = tk.Button(data_frame, font=("Arial", 16), text="Ügyfél törlése a rendszerből", command=kijelolt_adat_torles)
+del_button.grid(row=4, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
-label = tk.Label(data_frame, text="Onlineszámla jelszó:", font=("Arial", 16))
-label.grid(row=4, column=3, sticky="W", padx=10)
+mod_button = tk.Button(data_frame, font=("Arial", 16), text="Ügyfél adat módosítás", command=ugyfel_frissites)
+mod_button.grid(row=6, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
-oszjelszo_entry = tk.Entry(data_frame, font=("Arial", 16))
-oszjelszo_entry.grid(row=4, column=4, padx=10, pady=10, sticky="w")
+ex_button = tk.Button(data_frame, font=("Arial", 16), text="Dokumentum létrehozása", command=lambda:export_document(treeview, qr_canvas))
+ex_button.grid(row=8, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
-label = tk.Label(data_frame, text="Ügyintéző:", font=("Arial", 16))
-label.grid(row=6, column=3, sticky="W", padx=10)
-
-ugyint = tk.StringVar()
-ugyint.set("Válassz a listából") 
-ugyint_option = tk.OptionMenu(data_frame, ugyint, *option_list)
-ugyint_option.config(font=("Arial", 16))
-ugyint_option.grid(row=6, column=4, padx=10, pady=5, sticky="NSEW")
-
-add_button = tk.Button(data_frame, font=("Arial", 16), text="Hozzáadás", command=ugyfel_megad)
-add_button.grid(row=8, column=3, padx=10, pady=10, sticky="nsew")
-
-del_button = tk.Button(data_frame, font=("Arial", 16), text="Törlés", command=kijelolt_adat_torles)
-del_button.grid(row=8, column=4, padx=10, pady=10, sticky="nsew")
-
-mod_button = tk.Button(data_frame, font=("Arial", 16), text="Módosítás", command=ugyfel_frissites)
-mod_button.grid(row=10, column=3, padx=10, pady=10, sticky="nsew")
-
-ex_button = tk.Button(data_frame, font=("Arial", 16), text="Exportálás", command=lambda:export_document(treeview, qr_canvas))
-ex_button.grid(row=10, column=4, padx=10, pady=10, sticky="nsew")
-
-# Rácshoz tartozó beállítások
-root.rowconfigure(0, weight=1)
-root.columnconfigure(0, weight=1)
-main_frame.columnconfigure(0, weight=3)
-main_frame.columnconfigure(1, weight=1)
-main_frame.rowconfigure(0, weight=1)
-main_frame.rowconfigure(2, weight=1)  # Győződj meg róla, hogy a sor megfelelően van beállítva
 
 # Treeview létrehozása
-columns = ["ID", "Név", "Adószám", "Felhasználónév", "Jelszó", "Telefonszám", "E-mail cím", "Törlőkód", "Onlineszámla név", "Onlineszámla jelszó", "Ügyintéző"]
+style = ttk.Style()
+style.configure("Treeview", font=("Arial", 16))
+style.configure("Treeview.Heading", font=("Arial", 12))  # Betűméret növelése
+style.configure("Treeview", rowheight=30)  # Sorok (és fejlécek) magasságának növelése
+columns = ["ID", "Név", "Cégnév", "Felhasználónév", "Jelszó", "Telefonszám", "E-mail cím", "Törlőkód"]
 treeview = ttk.Treeview(treeview_frame, columns=columns, show="headings")
-treeview.grid(row=0, column=0, sticky="nsew", columnspan=2)
+treeview.grid(row=0, column=0, sticky="nsew")
 
+# Oszlopok széllességének a beállítása
 data = fetch_data()
-
 adjust_column_width(treeview, columns, data)
-# Oszlopok beállítása
 for col in columns:
     treeview.heading(col, text=col)
 
@@ -678,20 +661,21 @@ treeview.configure(yscroll=scrollbar.set)
 scrollbar.grid(row=0, column=2, sticky="ns")
 
 # Label a kijelölt adat megjelenítéséhez
-label_selected = tk.Label(main_frame, text="Nincs kijelölés", anchor="w", font=("Arial", 18))
+label_selected = tk.Label(main_frame, text="Nincs kijelölés", anchor="w", font=("Arial", 20))
 label_selected.grid(row=1, column=0, sticky="ew")
 
-label_search = tk.Label(search_frame, text="Ügyintéző szerinti lekérdezés", font=("Arial", 20))
+#Kereséshez szükséges elemek
+label_search = tk.Label(search_frame, text="Cég szerinti keresés:", font=("Arial", 20))
 label_search.grid(row=0, column=0, sticky="NSEW")
 
-ugyint_search = tk.StringVar()
-ugyint_search.set("Válassz a listából") 
-ugyint_search_option = tk.OptionMenu(search_frame, ugyint_search, *option_list)
-ugyint_search_option.config(font=("Arial", 16))
-ugyint_search_option.grid(row=0, column=1, sticky="NSEW", padx=60)
+search_entry = tk.Entry(search_frame, font=("Arial", 16))
+search_entry.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
-search_button = tk.Button(search_frame, font=("Arial", 16), text="Keresés", command=search_ugyint)
-search_button.grid(row=0, column=2, sticky="nsew")
+search_button = tk.Button(search_frame, font=("Arial", 16), text="Keresés", command=search_ceg)
+search_button.grid(row=0, column=2, sticky="w", padx=10, pady=10,)
+
+default_button = tk.Button(search_frame, font=("Arial", 16), text="Keresés alaphelyzetbe állítása", command=default_search)
+default_button.grid(row=0, column=4, sticky="w", padx=10, pady=10,)
 
 # Események kezelése
 treeview.bind("<Button-1>", show_selected_column)  # Bal egérkattintásra oszlop kijelzés
@@ -699,13 +683,13 @@ treeview.bind("<Double-1>", lambda event: copy_to_clipboard())  # Dupla kattint�
 treeview.bind("<<TreeviewSelect>>", on_tree_select)  # Kijelölt sor után QR kód generálás
 
 # QR kód megjelenítő canvas
-qr_canvas = tk.Canvas(qr_frame, bg="white", width=210, height=210)
+qr_canvas = tk.Canvas(qr_frame, bg="white", width=250, height=250)
 qr_canvas.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
 # QR kód szöveg
 qr_text = tk.StringVar()
 qr_text.set("Válassz egy sort!")
-qr_text_label = tk.Label(qr_frame, textvariable=qr_text, bg="white", wraplength=210, justify="center", font=("Arial", 12))
+qr_text_label = tk.Label(qr_frame, textvariable=qr_text, bg="white", wraplength=700, justify="center", font=("Arial", 16))
 qr_text_label.grid(row=3, column=0, pady=10, sticky="nsew")
 
 # Fő ciklus
