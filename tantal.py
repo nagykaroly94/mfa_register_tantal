@@ -135,15 +135,51 @@ def copy_to_clipboard():
     label_selected.config(text=f"Másolt adat: {cell_value} (Oszlop: {columns[column_index]})")
 
 def show_selected_column(event):
-    """Az aktuálisan kijelölt oszlop és sor megjelenítése."""
+    """Az aktuálisan kijelölt oszlop és sor megjelenítése, és az Entry mezők frissítése."""
     selected_item = treeview.focus()
     if not selected_item:
         label_selected.config(text="Nincs kijelölés")
         return
+
+    # Az aktuális oszlop meghatározása
     column = treeview.identify_column(event.x)
-    column_index = int(column.replace("#", "")) - 1
-    cell_value = treeview.item(selected_item)["values"][column_index]
+    column_index = int(column.replace("#", "")) - 1  # Oszlop indexe (0-alapú)
+    
+    # A kijelölt sor értékei
+    values = treeview.item(selected_item)["values"]
+
+    # Ellenőrizzük, hogy van-e adat az adott oszlopban
+    if column_index >= len(values):
+        label_selected.config(text="Hiányzó adat az oszlopban")
+        return
+
+    # Aktuális cella értéke
+    cell_value = values[column_index]
     label_selected.config(text=f"Kijelölt oszlop: {columns[column_index]}, Adat: {cell_value}")
+
+    # Az összes adat betöltése az Entry mezőkbe
+    if len(values) >= 7:
+        nev_entry.delete(0, tk.END)
+        nev_entry.insert(0, values[1]) 
+
+        cegnev_entry.delete(0, tk.END)
+        cegnev_entry.insert(0, values[2]) 
+
+        felhasznalonev_entry.delete(0, tk.END)
+        felhasznalonev_entry.insert(0, values[3])
+
+        jelszo_entry.delete(0, tk.END)
+        jelszo_entry.insert(0, values[4])
+
+        telefon_entry.delete(0, tk.END)
+        telefon_entry.insert(0, values[5])
+
+        email_entry.delete(0, tk.END)
+        email_entry.insert(0, values[6])
+
+        torlo_entry.delete(0, tk.END)
+        torlo_entry.insert(0, values[7])
+        add_button.config(state="disabled")
 
 def generate_qr(data):
     """QR kód generálása az adott szövegből."""
@@ -237,7 +273,7 @@ def adjust_column_width(tree, columns, data):
         max_width = max(len(str(row[col_index])) for row in data)  
         
         # A betűmérethez igazított szélesség kiszámítása
-        font_size_factor = 13  # Alap szorzó, finomhangolható
+        font_size_factor = 14  # Alap szorzó, finomhangolható
         column_width = max(max_width * font_size_factor, 100)  # Minimalizált szélesség biztosítása
         
         # Oszlop szélességének beállítása
@@ -305,8 +341,11 @@ def ugyfel_megad():
     qrkod = value
 
 
-    if not (nev and cegnev and felhasznalonev and jelszo and telefon and email and torlo and qrkod):
-        messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni a sikeres hozzáadáshoz.")
+    if not (nev and cegnev and felhasznalonev and jelszo and telefon and email and torlo):
+        messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni a sikeres hozzáadáshoz!")
+        return
+    if qrkod == None :
+        messagebox.showerror("Hiba", "Szükséges egy érvényes QR kódot is kiválasztani!")
         return
     mydb = db_kapcsolodas()
 
@@ -370,7 +409,6 @@ def search_ceg():
         treeview.insert("", tk.END, values=sor)
         
     mydb.close()
-    print(search_term)
 
 def ugyfel_frissites():
     global ertek_mod
@@ -401,8 +439,11 @@ def ugyfel_frissites():
                 uj_qrkod = value
                 
                 # Ellenőrizzük, hogy vannak-e kitöltött értékek
-                if not uj_nev and uj_cegnev and uj_felhasznalonev and uj_jelszo and uj_telefon and uj_email and uj_torlo and uj_qrkod:
-                    messagebox.showerror("Hiba", "Minden mezőt ki kell tölteni és ki kell választani az ügyintézőt is a sikeres frissítéshez.")
+                if not (uj_nev and uj_cegnev and uj_felhasznalonev and uj_jelszo and uj_telefon and uj_email and uj_torlo):
+                    messagebox.showerror("Hiba", "A Sikeres frissítéshez minden mezőt ki kell tölteni!")
+                    return
+                if uj_qrkod == None:
+                    messagebox.showerror("Hiba", "A Sikeres frissítéshez szükséges egy érvényes QR kódot is kiválasztani.")
                     return
 
                 # Frissítés az adatbázisban
@@ -431,6 +472,7 @@ def ugyfel_frissites():
                     email_entry.delete(0, tk.END)
                     torlo_entry.delete(0, tk.END)
                     jelszo_entry.delete(0,tk.END)
+                    qrkod_png.set("C:/")
 
                 messagebox.showinfo("Sikeres frissítés", f"{selected_username} felhasználó adatai frissítve.")
             else:
@@ -449,7 +491,7 @@ def export_document(treeview, qr_canvas):
 
     selected_data = treeview.item(selected_item[0])['values']
     nev = selected_data[1]  # Név a második oszlopban
-    helyreallitasi_kod = selected_data[7]  # Helyreállítási kód a hetedik oszlopban
+    helyreallitasi_kod = selected_data[7]  # Törlő kód a hetedik oszlopban
 
     # QR-kód mentése a Canvasról
     qr_kod_path = f"{nev}_qr_kod.png"
@@ -482,7 +524,7 @@ def export_document(treeview, qr_canvas):
         "Nyissa meg az alkalmazást, és válassza az „Új fiók hozzáadása” vagy „QR-kód beolvasása” opciót.",
         "Olvassa be az alábbi QR-kódot az alkalmazás segítségével.",
         "Az alkalmazás generál egy hatjegyű kódot, amelyet használhat a bejelentkezések során.",
-        "Jegyezze fel és tárolja biztonságosan a törlőkódokat (helyreállítási kódokat), amelyek az alkalmazás elvesztése esetén használhatók."
+        "Jegyezze fel és tárolja biztonságosan a törlőkódokat, amelyek az alkalmazás elvesztése esetén használhatók."
     ]
     for step in steps:
         doc.add_paragraph(step, style="List Number")
@@ -513,8 +555,8 @@ def export_document(treeview, qr_canvas):
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
 
-    # Helyreállítási kód
-    doc.add_heading("Helyreállítási kód", level=2)
+    # törlő kód
+    doc.add_heading("Törlő kód", level=2)
     p = doc.add_paragraph()
     run = p.add_run(str(helyreallitasi_kod))
     run.font.size = Pt(18)
@@ -522,9 +564,8 @@ def export_document(treeview, qr_canvas):
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
     # Figyelmeztetés
-    #doc.add_paragraph("FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a helyreállítási kódot senkivel.")
     paragraph = doc.add_paragraph()
-    important_run = paragraph.add_run("FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a helyreállítási kódot senkivel.")
+    important_run = paragraph.add_run("FONTOS: Ezt a dokumentumot tárolja biztonságos helyen! Ne ossza meg a QR-kódot vagy a törlő kódot senkivel.")
     important_run.font.size = Pt(16)
     important_run.font.color.rgb = RGBColor(255, 0, 0)
     important_run.bold = True
@@ -542,6 +583,17 @@ def export_document(treeview, qr_canvas):
         # Tisztítsd meg az ideiglenes QR-kód fájlt
         if os.path.exists(qr_kod_path):
             os.remove(qr_kod_path)
+
+def empty_entry():
+    nev_entry.delete(0, tk.END)
+    cegnev_entry.delete(0, tk.END)
+    felhasznalonev_entry.delete(0, tk.END)
+    jelszo_entry.delete(0, tk.END)
+    telefon_entry.delete(0, tk.END)
+    email_entry.delete(0, tk.END)
+    torlo_entry.delete(0, tk.END)
+    add_button.config(state="normal")
+    qrkod_png.set("C:/")
 
 # Főablak alapvető beállításai
 img=("ikon.ico")
@@ -611,41 +663,40 @@ email_entry = tk.Entry(data_frame, font=("Arial", 16))
 email_entry.grid(row=10, column=1, padx=10, pady=10, sticky="w")
 
 label = tk.Label(data_frame, text="QR kód:", font=("Arial", 16))
-label.grid(row=12, column=0, sticky="W", padx=10, pady=10)
+label.grid(row=14, column=0, sticky="W", padx=10, pady=10)
 
 qrkod_png=tk.StringVar()
 qrkod_png.set("C:/")
 qrkod_entry = tk.Entry(data_frame, font=("Arial", 16),textvariable=qrkod_png)
-qrkod_entry.grid(row=12, column=1, padx=10, pady=10, sticky="nsew", columnspan=4)
+qrkod_entry.grid(row=14, column=1, padx=10, pady=10, sticky="nsew", columnspan=4)
 
 talloz_button = tk.Button(data_frame, font=("Arial", 16), text="QR kód kiválasztása", command=png_kivalasztasa)
-talloz_button.grid(row=10, column=3, padx=10, pady=10, sticky="nsew", columnspan=2)
+talloz_button.grid(row=12, column=3, padx=10, pady=10, sticky="nsew", columnspan=2)
 
 label = tk.Label(data_frame, text="Törlő kód:", font=("Arial", 16))
-label.grid(row=0, column=3, sticky="W", padx=10, pady=10)
+label.grid(row=12, column=0, sticky="W", padx=10, pady=10)
 
 torlo_entry = tk.Entry(data_frame, font=("Arial", 16))
-torlo_entry.grid(row=0, column=4, padx=10, pady=10)
+torlo_entry.grid(row=12, column=1, padx=10, pady=10)
 
-add_button = tk.Button(data_frame, font=("Arial", 16), text="Új ügyfél hozzáadása", command=ugyfel_megad)
-add_button.grid(row=2, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
+add_button = tk.Button(data_frame, font=("Arial", 16), text="Új Ügyfél hozzáadása", command=ugyfel_megad)
+add_button.grid(row=4, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
 del_button = tk.Button(data_frame, font=("Arial", 16), text="Ügyfél törlése a rendszerből", command=kijelolt_adat_torles)
-del_button.grid(row=4, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
+del_button.grid(row=6, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
 mod_button = tk.Button(data_frame, font=("Arial", 16), text="Ügyfél adat módosítás", command=ugyfel_frissites)
-mod_button.grid(row=6, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
+mod_button.grid(row=8, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
 ex_button = tk.Button(data_frame, font=("Arial", 16), text="Dokumentum létrehozása", command=lambda:export_document(treeview, qr_canvas))
-ex_button.grid(row=8, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
-
+ex_button.grid(row=10, column=3, padx=10, pady=10, columnspan=2, sticky="nsew")
 
 # Treeview létrehozása
 style = ttk.Style()
 style.configure("Treeview", font=("Arial", 16))
 style.configure("Treeview.Heading", font=("Arial", 12))  # Betűméret növelése
 style.configure("Treeview", rowheight=30)  # Sorok (és fejlécek) magasságának növelése
-columns = ["ID", "Név", "Cégnév", "Felhasználónév", "Jelszó", "Telefonszám", "E-mail cím", "Törlőkód"]
+columns = ["ID", "Név", "Cégnév vagy Adószám", "Felhasználónév", "Jelszó", "Telefonszám", "E-mail cím", "Törlőkód"]
 treeview = ttk.Treeview(treeview_frame, columns=columns, show="headings")
 treeview.grid(row=0, column=0, sticky="nsew")
 
@@ -674,13 +725,18 @@ search_entry.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 search_button = tk.Button(search_frame, font=("Arial", 16), text="Keresés", command=search_ceg)
 search_button.grid(row=0, column=2, sticky="w", padx=10, pady=10,)
 
-default_button = tk.Button(search_frame, font=("Arial", 16), text="Keresés alaphelyzetbe állítása", command=default_search)
-default_button.grid(row=0, column=4, sticky="w", padx=10, pady=10,)
+default_button = tk.Button(data_frame, font=("Arial", 16), text="Keresés alaphelyzetbe állítása", command=default_search)
+default_button.grid(row=0, column=4, sticky="nsew", padx=10, pady=10,)
+
+empty_button = tk.Button(data_frame, font=("Arial", 16), text="Beviteli mezők kiürítése", command=empty_entry)
+empty_button.grid(row=2, column=4, sticky="nsew", padx=10, pady=10,)
 
 # Események kezelése
-treeview.bind("<Button-1>", show_selected_column)  # Bal egérkattintásra oszlop kijelzés
+treeview.bind("<ButtonRelease-1>", show_selected_column)  # Bal egérkattintásra oszlop kijelzés
 treeview.bind("<Double-1>", lambda event: copy_to_clipboard())  # Dupla kattintás a másoláshoz
 treeview.bind("<<TreeviewSelect>>", on_tree_select)  # Kijelölt sor után QR kód generálás
+search_entry.bind("<Return>", lambda event: search_ceg())
+root.bind("<Control-Delete>", lambda event: del_button.invoke())
 
 # QR kód megjelenítő canvas
 qr_canvas = tk.Canvas(qr_frame, bg="white", width=250, height=250)
